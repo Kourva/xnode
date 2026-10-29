@@ -254,11 +254,14 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            preferredRefreshRate = 120.0f
+            alpha = 0.8f
         }
 
         try {
@@ -271,7 +274,9 @@ class OverlayService : Service() {
 
     private fun refreshOverlayConfig() {
         val config = NotchPreferences.loadConfig(this)
-        overlayView?.config = config
+        if (overlayView?.config != config) {
+            overlayView?.config = config
+        }
     }
 
     private fun pauseMetricsLoop() {
@@ -284,7 +289,9 @@ class OverlayService : Service() {
         updateJob = serviceScope.launch {
             while (isActive) {
                 val currentConfig = NotchPreferences.loadConfig(this@OverlayService)
-                overlayView?.config = currentConfig
+                if (overlayView?.config != currentConfig) {
+                    overlayView?.config = currentConfig
+                }
 
                 val metrics = withContext(Dispatchers.IO) {
                     metricsCollector.readAllMetrics(currentConfig.maxNetSpeedMB)

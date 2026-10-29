@@ -27,6 +27,7 @@ class NotchOverlayView(context: Context) : View(context) {
 
     var config: NotchConfig = NotchConfig()
         set(value) {
+            if (field == value) return
             val activeNodeIds = value.nodes.map { it.id }.toSet()
             val iterator = runningAnimators.iterator()
             while (iterator.hasNext()) {
@@ -38,16 +39,21 @@ class NotchOverlayView(context: Context) : View(context) {
             }
             field = value
             recalculateDotPositions()
-            invalidate()
+            postInvalidateOnAnimation()
         }
 
-    // Precomputed dot positions per active node to ensure zero allocations and zero sorting in onDraw
-    private data class CachedNode(
+    // Precomputed dot coordinate holding raw floats
+    class DotPoint(val x: Float, val y: Float)
+
+    // Precomputed node container to ensure zero allocations inside onDraw()
+    private class CachedNode(
         val node: NodeConfig,
-        val dots: List<DotPoint>
+        val dots: Array<DotPoint>,
+        val isNetNode: Boolean
     )
 
-    private var cachedNodes: List<CachedNode> = emptyList()
+    private var cachedNodes: Array<CachedNode> = emptyArray()
+    private var dotRadiusPx: Float = 0f
 
     // Animated ratios per node ID
     private val animatedRatios = mutableMapOf<String, Float>()
@@ -59,6 +65,7 @@ class NotchOverlayView(context: Context) : View(context) {
     var isNetworkIdle: Boolean = false
     private var rainbowModeEndTimeMs: Long = 0L
 
+    // Dedicated reusable Paint objects (never allocated in onDraw)
     private val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
@@ -67,8 +74,20 @@ class NotchOverlayView(context: Context) : View(context) {
         style = Paint.Style.FILL
     }
 
+    // Reusable HSV buffer to prevent float array allocations during rainbow mode
+    private val rainbowHsv = floatArrayOf(0f, 1.0f, 1.0f)
+
+    companion object {
+        private const val COLOR_GHOST_ON = 0xFF111111.toInt()
+        private const val COLOR_GHOST_OFF = 0xFF3D3D3D.toInt()
+        private const val COLOR_TEMP_ALERT = 0xFFFF0000.toInt()
+        private const val COLOR_TEMP_DIM = 0xFF444444.toInt()
+    }
+
     init {
-        setBackgroundColor(Color.TRANSPARENT)
+        // Explicitly set background to null to eliminate any full-screen overdraw pass on the GPU
+        background = null
+        setWillNotDraw(false)
     }
 
     fun triggerRainbowMode(durationMs: Long = 3000L) {
@@ -83,7 +102,7 @@ class NotchOverlayView(context: Context) : View(context) {
             interpolator = DecelerateInterpolator()
             addUpdateListener { anim ->
                 animatedRatios[nodeId] = anim.animatedValue as Float
-                invalidate()
+                postInvalidateOnAnimation()
             }
         }
         runningAnimators[nodeId] = animator
@@ -111,7 +130,7 @@ class NotchOverlayView(context: Context) : View(context) {
                     interpolator = DecelerateInterpolator()
                     addUpdateListener { anim ->
                         animatedRatios[node.id] = anim.animatedValue as Float
-                        invalidate()
+                        postInvalidateOnAnimation()
                     }
                 }
                 runningAnimators[node.id] = animator
@@ -120,7 +139,7 @@ class NotchOverlayView(context: Context) : View(context) {
                 animatedRatios[node.id] = targetRatio
             }
         }
-        invalidate()
+        postInvalidateOnAnimation()
     }
 
     fun stopAllAnimations() {
@@ -166,7 +185,7 @@ class NotchOverlayView(context: Context) : View(context) {
 
         if (changed) {
             recalculateDotPositions()
-            invalidate()
+            postInvalidateOnAnimation()
         }
     }
 
@@ -187,15 +206,15 @@ class NotchOverlayView(context: Context) : View(context) {
     }
 
     /**
-     * Precomputes dot positions and sorts them once, avoiding heavy calculations
-     * and array allocations inside onDraw() for 60fps performance.
+     * Precomputes dot positions, sizes, and sorts them once, avoiding heavy calculations
+     * and array allocations inside onDraw() for 120fps performance.
      */
     private fun recalculateDotPositions() {
         val density = resources.displayMetrics.density
+        dotRadiusPx = 1.8f * density
         val baseCenterX = if (cutoutOriginX > 0) cutoutOriginX else (width.takeIf { it > 0 }?.toFloat() ?: 1080f) / 2f
         val baseCenterY = if (cutoutOriginY > 0) cutoutOriginY else 24f * density
         val defaultHoleRadius = if (cutoutWidth > 0) cutoutWidth / 2f else 12f * density
-        val dotRadius = 1.8f * density
         val gapPx = 2.5f
 
         val newCached = mutableListOf<CachedNode>()
@@ -204,17 +223,17 @@ class NotchOverlayView(context: Context) : View(context) {
             if (!node.enabled) return@forEach
 
             val n = node.dotCount.coerceIn(2, 5)
-            val dots = when (node.shape) {
+            val dots: Array<DotPoint> = when (node.shape) {
                 NodeShape.ARC -> {
                     val radiusPx = node.sizeDp * density
-                    val targetChord = (2f * dotRadius) + gapPx
+                    val targetChord = (2f * dotRadiusPx) + gapPx
                     val stepRad = 2.0 * asin((targetChord / (2.0 * radiusPx)).coerceIn(0.04, 0.45))
                     val stepDeg = Math.toDegrees(stepRad)
                     val centerAngle = if (node.direction == NodeDirection.LEFT) 180.0 else 0.0
                     val nodeCenterX = baseCenterX + (node.positionXDp * density)
                     val nodeCenterY = baseCenterY + (node.positionYDp * density)
 
-                    val rawDots = mutableListOf<DotPoint>()
+                    val rawDots = ArrayList<DotPoint>(n)
                     for (i in 0 until n) {
                         val offsetIndex = i - (n - 1) / 2.0
                         val angleDeg = centerAngle + (offsetIndex * stepDeg)
@@ -223,7 +242,8 @@ class NotchOverlayView(context: Context) : View(context) {
                         val y = nodeCenterY + (radiusPx * sin(rad)).toFloat()
                         rawDots.add(DotPoint(x, y))
                     }
-                    rawDots.sortedByDescending { it.y }
+                    rawDots.sortByDescending { it.y }
+                    rawDots.toTypedArray()
                 }
                 NodeShape.STRAIGHT -> {
                     val lengthPx = node.sizeDp * density
@@ -236,34 +256,32 @@ class NotchOverlayView(context: Context) : View(context) {
                     val nodeCenterY = baseCenterY + (node.positionYDp * density)
 
                     val stepY = if (n > 1) lengthPx / (n - 1) else 0f
-                    // Center the vertical column of dots on nodeCenterY across 2, 3, 4, or 5 dots
                     val totalColumnHeight = if (n > 1) (n - 1) * stepY else 0f
                     val startY = nodeCenterY - (totalColumnHeight / 2f)
 
-                    val rawDots = mutableListOf<DotPoint>()
+                    val rawDots = ArrayList<DotPoint>(n)
                     for (i in 0 until n) {
                         val y = startY + (i * stepY)
                         rawDots.add(DotPoint(nodeCenterX, y))
                     }
-                    rawDots.sortedByDescending { it.y }
+                    rawDots.sortByDescending { it.y }
+                    rawDots.toTypedArray()
                 }
             }
 
-            newCached.add(CachedNode(node, dots))
+            val isNet = node.metric == MetricType.NET_IN || node.metric == MetricType.NET_OUT
+            newCached.add(CachedNode(node, dots, isNet))
         }
 
-        cachedNodes = newCached
+        cachedNodes = newCached.toTypedArray()
     }
 
     override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
+        val totalNodes = cachedNodes.size
+        if (totalNodes == 0) return
 
-        val density = resources.displayMetrics.density
-        val dotRadius = 1.8f * density
-
-        // Ghost mode styling: #111111 when ON, #3D3D3D when OFF
-        val unfilledColorInt = if (config.ghostMode) Color.parseColor("#111111") else Color.parseColor("#3D3D3D")
-        basePaint.color = unfilledColorInt
+        // Ghost mode styling using pre-resolved integer colors (no string parsing)
+        basePaint.color = if (config.ghostMode) COLOR_GHOST_ON else COLOR_GHOST_OFF
 
         // Check active rainbow mode (Easter egg shake)
         val now = System.currentTimeMillis()
@@ -271,19 +289,26 @@ class NotchOverlayView(context: Context) : View(context) {
         if (isRainbow) {
             postInvalidateOnAnimation()
         }
-        val rainbowHue = ((now % 1000L) / 1000f) * 360f
-        val rainbowColor = Color.HSVToColor(floatArrayOf(rainbowHue, 1.0f, 1.0f))
 
-        // Draw each cached node
-        for (cached in cachedNodes) {
-            val node = cached.node
+        val rainbowColor = if (isRainbow) {
+            rainbowHsv[0] = ((now % 1000L) / 1000f) * 360f
+            Color.HSVToColor(rainbowHsv)
+        } else {
+            0
+        }
+
+        val radius = dotRadiusPx
+
+        // Iterate over pre-cached nodes with zero object allocations
+        for (index in 0 until totalNodes) {
+            val cached = cachedNodes[index]
 
             // Skip drawing NET_IN or NET_OUT nodes if network is idle
-            val isNetNode = node.metric == MetricType.NET_IN || node.metric == MetricType.NET_OUT
-            if (isNetNode && isNetworkIdle) {
+            if (cached.isNetNode && isNetworkIdle) {
                 continue
             }
 
+            val node = cached.node
             val ratio = animatedRatios[node.id] ?: 0.5f
 
             // Dynamic effects detection
@@ -294,60 +319,70 @@ class NotchOverlayView(context: Context) : View(context) {
                 postInvalidateOnAnimation()
             }
 
-            // Determine active color
-            val activeColorInt = if (isRainbow) {
-                rainbowColor
-            } else if (isTempWarning) {
-                val strobeOn = ((now / 250L) % 2L) == 0L
-                if (strobeOn) Color.RED else Color.DKGRAY
-            } else if (node.isDynamicColor) {
-                if (ratio >= node.alertThreshold) node.alertColor else node.baseColor
-            } else {
-                node.staticColor
+            // Determine active color without allocations
+            val activeColorInt = when {
+                isRainbow -> rainbowColor
+                isTempWarning -> {
+                    val strobeOn = ((now / 250L) % 2L) == 0L
+                    if (strobeOn) COLOR_TEMP_ALERT else COLOR_TEMP_DIM
+                }
+                node.isDynamicColor -> {
+                    if (ratio >= node.alertThreshold) node.alertColor else node.baseColor
+                }
+                else -> node.staticColor
             }
 
-            renderDots(canvas, cached.dots, dotRadius, activeColorInt, ratio, cached.dots.size, isBatCharging, now)
+            renderDots(canvas, cached.dots, radius, activeColorInt, ratio, isBatCharging, now)
         }
     }
 
     private fun renderDots(
         canvas: Canvas,
-        sortedDots: List<DotPoint>,
+        dots: Array<DotPoint>,
         dotRadius: Float,
         activeColor: Int,
         ratio: Float,
-        n: Int,
         isBatCharging: Boolean,
         now: Long
     ) {
+        val n = dots.size
         val totalFill = ratio.coerceIn(0f, 1f) * n
+        val fullCount = totalFill.toInt().coerceAtMost(n)
 
+        // 1. Draw base background dots
         for (i in 0 until n) {
-            val pt = sortedDots[i]
-
-            // 1. Draw base unfilled dot
+            val pt = dots[i]
             canvas.drawCircle(pt.x, pt.y, dotRadius, basePaint)
+        }
 
-            // Charging pulse multiplier for breathing heartbeat effect
+        if (totalFill <= 0f) return
+
+        // 2. Draw fully illuminated dots
+        fillPaint.color = activeColor
+        for (i in 0 until fullCount) {
+            val pt = dots[i]
             val pulseMultiplier = if (isBatCharging) {
                 ((sin((now + i * 180) / 250.0).toFloat() * 0.35f) + 0.65f).coerceIn(0.2f, 1.0f)
             } else {
                 1.0f
             }
+            fillPaint.alpha = (255 * pulseMultiplier).toInt().coerceIn(0, 255)
+            canvas.drawCircle(pt.x, pt.y, dotRadius, fillPaint)
+        }
 
-            // 2. Draw active fill from bottom up
-            if (totalFill >= (i + 1)) {
-                fillPaint.color = activeColor
-                fillPaint.alpha = (255 * pulseMultiplier).toInt().coerceIn(0, 255)
-                canvas.drawCircle(pt.x, pt.y, dotRadius, fillPaint)
-            } else if (totalFill > i) {
-                val fraction = (totalFill - i).coerceIn(0f, 1f)
-                fillPaint.color = activeColor
-                fillPaint.alpha = (fraction * 255 * pulseMultiplier).toInt().coerceIn(0, 255)
+        // 3. Draw partial dot at threshold (if any)
+        if (fullCount < n) {
+            val fraction = totalFill - fullCount
+            if (fraction > 0.01f) {
+                val pt = dots[fullCount]
+                val pulseMultiplier = if (isBatCharging) {
+                    ((sin((now + fullCount * 180) / 250.0).toFloat() * 0.35f) + 0.65f).coerceIn(0.2f, 1.0f)
+                } else {
+                    1.0f
+                }
+                fillPaint.alpha = (fraction * 255f * pulseMultiplier).toInt().coerceIn(0, 255)
                 canvas.drawCircle(pt.x, pt.y, dotRadius, fillPaint)
             }
         }
     }
-
-    private data class DotPoint(val x: Float, val y: Float)
 }
