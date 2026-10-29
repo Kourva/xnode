@@ -1,27 +1,19 @@
 <div align="center">
 
-```
-  _  __ _   _   ___   ____   _____ 
- \ \/ /| \ | | / _ \ |  _ \ | ____|
-  \  / |  \| || | | || | | ||  _|  
-  /  \ | |\  || |_| || |_| || |___ 
- /_/\_\|_| \_| \___/ |____/ |_____|
-```
+<img src="https://github.com/Kourva/xnode/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png" width="120px" />
 
 # X N O D E
-### Hardware Resource Telemetry HUD for Android
+### Nothing inspired hardware Resource Telemetry HUD for Android
+
+<p align="center">
+  <b>xnode</b> transforms your device's camera notch and punch-hole cutout into a minimalist, real-time hardware telemetry HUD. Designed with the distinctive high-contrast dot-matrix aesthetic of Nothing OS.
+</p>
 
 [![Android API](https://img.shields.io/badge/Android-API%2031%2B%20(Android%2012%2B)-black?style=for-the-badge&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-black?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-M3-black?style=for-the-badge&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
 [![Download APK](https://img.shields.io/badge/Release-Download%20APK%20(v1.0.0)-red?style=for-the-badge&logo=github)](https://github.com/Kourva/xnode/releases/latest)
-
-<p align="center">
-  <b>xnode</b> transforms your device's camera notch and punch-hole cutout into a minimalist, real-time hardware telemetry HUD. Designed with the distinctive high-contrast dot-matrix aesthetic of Nothing OS.
-</p>
-
----
 
 </div>
 
@@ -31,9 +23,7 @@
 
 Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **WindowManager Overlay Service**, xnode is ultra-lightweight, battery-efficient, and optimized for high-refresh-rate displays.
 
----
-
-## ✨ Features
+## Features
 
 - **Dynamic Hardware Nodes**:
   - `CPU`: Real-time active CPU utilization parsed via `/proc/stat` with fallback heuristics.
@@ -61,40 +51,28 @@ Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **Wind
   - Tactile haptic feedback across all toggles, sliders, and buttons.
   - Edge-to-edge transparent navigation with fluid Android 14+ transitions.
 
----
+## Interface Preview
 
-## 📸 Interface Preview
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="https://github.com/user-attachments/assets/079e7f9f-8794-4e82-ae35-04f2cf91f22f" width="250" />
+      </td>
+      <td align="center">
+        <img src="https://github.com/user-attachments/assets/5db92731-eee5-48f3-810d-b511408a8bfc" width="250" />
+      </td>
+       <td align="center">
+        <img src="https://github.com/user-attachments/assets/66ebfa89-a3a4-49ba-8ee0-4f38745f3337" width="250" />
+      </td>
+       <td align="center">
+        <img src="https://github.com/user-attachments/assets/fe7c60bd-78e7-4f74-a006-30545eb4cd92" width="250" />
+      </td>
+    </tr>
+  </table>
+</div>
 
-```
-+-------------------------------------------------------+
-|  XNODE                         [Live Stats]      (⚙) |
-|  CPU: 18%  |  MEM: 4.1GB  |  BAT: 84%  |  NET: 12KB/s |
-+-------------------------------------------------------+
-|                                                       |
-|                     (  * * *  )  <- Camera Cutout     |
-|                     (  NODE   )                       |
-|                                                       |
-|  [+] ADD NEW NODE                                     |
-|                                                       |
-|  +-------------------------------------------------+  |
-|  | CPU Node [Left Arc]                     (ON) [x]|  |
-|  | Shape: [ Arc | Straight ]                       |  |
-|  | Direction: [ Left | Right ]                     |  |
-|  | Dot Count: [ 2 | 3 | 4 | 5 ]                    |  |
-|  | Size / Radius:  [-------O-----] 42.0 dp [Reset] |  |
-|  | Position X:     [----O--------] 17.0 dp [Reset] |  |
-|  | Position Y:     [-------O-----] -2.0 dp [Reset] |  |
-|  | Color:          [ Static | Dynamic ]            |  |
-|  +-------------------------------------------------+  |
-|                                                       |
-|  [  START OVERLAY  ]                                  |
-|  AI-Generated, inspired by Nothing. Built by Kourva.  |
-+-------------------------------------------------------+
-```
-
----
-
-## 📥 Installation
+## Installation
 
 ### Requirements
 - **Android 12.0+ (API Level 31+)**
@@ -106,15 +84,13 @@ Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **Wind
 3. Launch **XNODE** from your app drawer.
 4. When prompted, grant the **Display over other apps** (Overlay) permission so xnode can draw around your camera cutout.
 
----
-
-## 🛠️ Usage Guide
+## Usage Guide
 
 1. **Start the HUD**:
    - Tap the large bottom pill button: **START OVERLAY**.
    - The persistent low-priority foreground service will start, and the default nodes will appear around your camera notch.
 2. **Add & Customize Nodes**:
-   - Tap **+ ADD NEW NODE** at the bottom of the node list to create an independent telemetry node.
+   - Tap the circular **+** button next to the Start/Stop button at the bottom to add a new independent telemetry node.
    - Select the data source (`CPU`, `MEM`, `BAT`, `NET`, `TEMP`, or `DISK`).
    - Choose your preferred geometry: **Arc** for curved punch-holes or **Straight** for vertical bars.
    - Adjust the **Arc Size**, **Position X**, and **Position Y** sliders until the dots align symmetrically around your camera hole.
@@ -122,9 +98,7 @@ Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **Wind
    - Tap the **Gear (⚙)** icon in the top right header to access Global Settings.
    - Configure **Dark Mode**, **Ghost Mode** (50% transparent dots), **Pocket Mode**, **Update Interval (1s - 10s)**, and **Max Network Scale (KB/s)**.
 
----
-
-## 🏗️ Architecture & Development
+## Architecture & Development
 
 xnode follows modern Android best practices:
 - **UI Layer**: 100% Jetpack Compose with Material 3 theming and custom Canvas drawing.
@@ -149,14 +123,11 @@ gradle :app:testDebugUnitTest
 gradle assembleRelease
 ```
 
----
-
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
 
-## 🤝 Attribution
+## Attribution
 
-**AI-Generated, inspired by Nothing. Built by Kourva.**
+**AI-Generated, inspired by Nothing.**
