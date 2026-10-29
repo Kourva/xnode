@@ -17,6 +17,17 @@
 
 </div>
 
+## Inspiration & Origin
+
+**Why build xnode?**
+
+On Linux, I'm used to having CPU and RAM monitors in my taskbar. It's second nature to glance at them and know when to close a heavy app. Android doesn't really have that kind of ambient telemetry without relying on clunky widgets.
+
+Since I use a Nothing Phone (2a), I realized the camera punch-hole is the perfect place for a minimal HUD. It takes up zero screen space, and the dot-matrix style fits the Nothing OS vibe perfectly.
+
+**The "AI-Generated" Part:**
+I don't have a background in Android development. I built this using Google AI to bring the concept to life, write the Canvas math, and set up the CI/CD. Since it's AI-assisted, I'm open-sourcing it so real developers (or other AI builders) can fork it, optimize it, or add features like WebSocket remote control and Glyph integration.
+
 ## Overview
 
 **xnode** renders lightweight, non-intrusive ambient dot clusters and arc meters directly around your front camera cutout. Track your processor load, physical memory pressure, network throughput, battery level, battery temperature, or disk storage without ever pulling down the notification shade or leaving your active app.
