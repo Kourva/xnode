@@ -1,21 +1,17 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project specific ProGuard rules for xnode
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve model classes
+-keep class com.example.model.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Preserve Activities and Services
+-keep class com.example.OverlayService { *; }
+-keep class com.example.SettingsActivity { *; }
+-keep class com.example.MainActivity { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Preserve Kotlin reflection/coroutines metadata if present
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+
+# Keep R class fields to avoid issues with dynamic resource lookups
+-keepclassmembers class **.R$* {
+    public static <fields>;
+}

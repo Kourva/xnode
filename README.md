@@ -1,0 +1,162 @@
+<div align="center">
+
+```
+  _  __ _   _   ___   ____   _____ 
+ \ \/ /| \ | | / _ \ |  _ \ | ____|
+  \  / |  \| || | | || | | ||  _|  
+  /  \ | |\  || |_| || |_| || |___ 
+ /_/\_\|_| \_| \___/ |____/ |_____|
+```
+
+# X N O D E
+### Hardware Resource Telemetry HUD for Android
+
+[![Android API](https://img.shields.io/badge/Android-API%2031%2B%20(Android%2012%2B)-black?style=for-the-badge&logo=android)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-black?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
+[![Compose](https://img.shields.io/badge/Jetpack%20Compose-M3-black?style=for-the-badge&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
+[![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
+[![Download APK](https://img.shields.io/badge/Release-Download%20APK%20(v1.0.0)-red?style=for-the-badge&logo=github)](https://github.com/Kourva/xnode/releases/latest)
+
+<p align="center">
+  <b>xnode</b> transforms your device's camera notch and punch-hole cutout into a minimalist, real-time hardware telemetry HUD. Designed with the distinctive high-contrast dot-matrix aesthetic of Nothing OS.
+</p>
+
+---
+
+</div>
+
+## Overview
+
+**xnode** renders lightweight, non-intrusive ambient dot clusters and arc meters directly around your front camera cutout. Track your processor load, physical memory pressure, network throughput, battery level, battery temperature, or disk storage without ever pulling down the notification shade or leaving your active app.
+
+Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **WindowManager Overlay Service**, xnode is ultra-lightweight, battery-efficient, and optimized for high-refresh-rate displays.
+
+---
+
+## ✨ Features
+
+- **Dynamic Hardware Nodes**:
+  - `CPU`: Real-time active CPU utilization parsed via `/proc/stat` with fallback heuristics.
+  - `MEM_FREE` & `MEM_USED`: Active RAM pressure via `ActivityManager.MemoryInfo`.
+  - `NET_IN` & `NET_OUT`: Real-time network throughput delta via `TrafficStats`.
+  - `BAT`: Battery percentage monitoring with charging detection.
+  - `TEMP`: Battery thermal sensor tracking with overheat threshold coloring.
+  - `DISK`: Internal flash storage capacity monitoring via `StatFs`.
+- **Configurable Geometry**:
+  - **Shapes**: Adaptive **Arc** (circular contour wrapping punch-holes) or **Straight** (vertical edge line).
+  - **Node Direction**: Hug the left or right curve of the cutout.
+  - **Configurable Dot Counts**: Choose between 2, 3, 4, or 5 ultra-crisp micro-dots per node.
+  - **Sub-Pixel Calibration**: Independent X offset, Y offset, and Arc Size / radius sliders with 1-tap reset buttons.
+- **Color Modes**:
+  - **Static**: Custom monochrome or accent hex colors.
+  - **Dynamic**: Real-time reactive gradients (Normal: Pure White `#FFFFFF`, Warning: Amber `#FFA500`, Critical: Crimson `#FF3B30`).
+- **Hardware Sensor & Context Automations**:
+  - 📱 **Pocket Mode (Proximity Sensor)**: Automatically hides the overlay when your phone is in your pocket or face-down.
+  - 🎮 **Game / Landscape Mode**: Automatically detects screen orientation changes and suppresses the overlay to prevent obstructing full-screen games and media.
+  - 🔋 **Low Battery Auto-Kill**: Safely shuts down telemetry services when battery drops below 15% to conserve device power.
+  - 🌈 **Shake-to-Rainbow (Easter Egg)**: Give your phone a quick shake to trigger a dynamic RGB wave across all telemetry dots!
+- **Nothing OS Inspired UI**:
+  - Pure `#000000` AMOLED black styling.
+  - Dot-matrix typography (`NDot 55` / `NDot 57`).
+  - Tactile haptic feedback across all toggles, sliders, and buttons.
+  - Edge-to-edge transparent navigation with fluid Android 14+ transitions.
+
+---
+
+## 📸 Interface Preview
+
+```
++-------------------------------------------------------+
+|  XNODE                         [Live Stats]      (⚙) |
+|  CPU: 18%  |  MEM: 4.1GB  |  BAT: 84%  |  NET: 12KB/s |
++-------------------------------------------------------+
+|                                                       |
+|                     (  * * *  )  <- Camera Cutout     |
+|                     (  NODE   )                       |
+|                                                       |
+|  [+] ADD NEW NODE                                     |
+|                                                       |
+|  +-------------------------------------------------+  |
+|  | CPU Node [Left Arc]                     (ON) [x]|  |
+|  | Shape: [ Arc | Straight ]                       |  |
+|  | Direction: [ Left | Right ]                     |  |
+|  | Dot Count: [ 2 | 3 | 4 | 5 ]                    |  |
+|  | Size / Radius:  [-------O-----] 42.0 dp [Reset] |  |
+|  | Position X:     [----O--------] 17.0 dp [Reset] |  |
+|  | Position Y:     [-------O-----] -2.0 dp [Reset] |  |
+|  | Color:          [ Static | Dynamic ]            |  |
+|  +-------------------------------------------------+  |
+|                                                       |
+|  [  START OVERLAY  ]                                  |
+|  AI-Generated, inspired by Nothing. Built by Kourva.  |
++-------------------------------------------------------+
+```
+
+---
+
+## 📥 Installation
+
+### Requirements
+- **Android 12.0+ (API Level 31+)**
+- Devices with a centered or corner hole-punch camera (default calibrations tailored for **Nothing Phone (2a)**, customizable for any punch-hole display).
+
+### Sideloading
+1. Download the latest `xnode-v1.0.0.apk` from the [Releases](https://github.com/Kourva/xnode/releases) tab.
+2. Open the downloaded APK on your Android device and tap **Install**.
+3. Launch **XNODE** from your app drawer.
+4. When prompted, grant the **Display over other apps** (Overlay) permission so xnode can draw around your camera cutout.
+
+---
+
+## 🛠️ Usage Guide
+
+1. **Start the HUD**:
+   - Tap the large bottom pill button: **START OVERLAY**.
+   - The persistent low-priority foreground service will start, and the default nodes will appear around your camera notch.
+2. **Add & Customize Nodes**:
+   - Tap **+ ADD NEW NODE** at the bottom of the node list to create an independent telemetry node.
+   - Select the data source (`CPU`, `MEM`, `BAT`, `NET`, `TEMP`, or `DISK`).
+   - Choose your preferred geometry: **Arc** for curved punch-holes or **Straight** for vertical bars.
+   - Adjust the **Arc Size**, **Position X**, and **Position Y** sliders until the dots align symmetrically around your camera hole.
+3. **Global Settings**:
+   - Tap the **Gear (⚙)** icon in the top right header to access Global Settings.
+   - Configure **Dark Mode**, **Ghost Mode** (50% transparent dots), **Pocket Mode**, **Update Interval (1s - 10s)**, and **Max Network Scale (KB/s)**.
+
+---
+
+## 🏗️ Architecture & Development
+
+xnode follows modern Android best practices:
+- **UI Layer**: 100% Jetpack Compose with Material 3 theming and custom Canvas drawing.
+- **Service Layer**: Dedicated foreground `OverlayService` utilizing `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY`.
+- **Navigation**: Type-safe `androidx.navigation:navigation-compose` with standard predictive back integration.
+- **Telemetry Engine**: Background coroutines polling system hardware interfaces (`/proc/stat`, `ActivityManager`, `TrafficStats`, `BatteryManager`, `StatFs`, `SensorManager`).
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/Kourva/xnode.git
+cd xnode
+
+# Build debug APK
+gradle assembleDebug
+
+# Run unit and Robolectric tests
+gradle :app:testDebugUnitTest
+
+# Build release bundle
+gradle assembleRelease
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🤝 Attribution
+
+**AI-Generated, inspired by Nothing. Built by Kourva.**
