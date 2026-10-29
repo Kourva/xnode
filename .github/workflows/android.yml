@@ -48,15 +48,19 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Debug APK
+      - name: Upload Debug APKs
         uses: actions/upload-artifact@v4
         with:
-          name: xnode-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: xnode-debug-apks
+          path: app/build/outputs/apk/debug/*.apk
 
-      - name: Prepare Release APK
+      - name: Prepare Release APKs
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/xnode-debug.apk
+        run: |
+          cp app/build/outputs/apk/debug/app-universal-debug.apk app/build/outputs/apk/debug/xnode-debug.apk || cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk app/build/outputs/apk/debug/xnode-debug.apk || true
+          cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk app/build/outputs/apk/debug/xnode-arm64-v8a-debug.apk || true
+          cp app/build/outputs/apk/debug/app-armeabi-v7a-debug.apk app/build/outputs/apk/debug/xnode-armeabi-v7a-debug.apk || true
+          cp app/build/outputs/apk/debug/app-x86_64-debug.apk app/build/outputs/apk/debug/xnode-x86_64-debug.apk || true
 
       - name: Publish APK to Releases
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
@@ -69,4 +73,6 @@ jobs:
           prerelease: true
           files: |
             app/build/outputs/apk/debug/xnode-debug.apk
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/xnode-arm64-v8a-debug.apk
+            app/build/outputs/apk/debug/xnode-armeabi-v7a-debug.apk
+            app/build/outputs/apk/debug/xnode-x86_64-debug.apk
