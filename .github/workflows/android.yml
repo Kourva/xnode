@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build & Test APK
@@ -50,3 +53,20 @@ jobs:
         with:
           name: xnode-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Prepare Release APK
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/xnode-debug.apk
+
+      - name: Publish APK to Releases
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: "Latest Debug Build"
+          tag_name: "v1.0.0-build-${{ github.run_number }}"
+          prerelease: true
+          files: |
+            app/build/outputs/apk/debug/xnode-debug.apk
+            app/build/outputs/apk/debug/app-debug.apk

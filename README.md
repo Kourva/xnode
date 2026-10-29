@@ -79,7 +79,7 @@ Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **Wind
 - Devices with a centered or corner hole-punch camera (default calibrations tailored for **Nothing Phone (2a)**, customizable for any punch-hole display).
 
 ### Sideloading
-1. Download the latest `xnode-v1.0.0.apk` from the [Releases](https://github.com/Kourva/xnode/releases) tab.
+1. Download the latest `xnode-debug.apk` directly from the [Releases](https://github.com/Kourva/xnode/releases) tab. (No GitHub account required).
 2. Open the downloaded APK on your Android device and tap **Install**.
 3. Launch **XNODE** from your app drawer.
 4. When prompted, grant the **Display over other apps** (Overlay) permission so xnode can draw around your camera cutout.
