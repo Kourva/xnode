@@ -37,6 +37,24 @@ Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **Wind
 > [!WARNING]
 > **Overlay Touch Blocking:** Due to Android 12+ security rules, some apps (like the GitHub app) may become unresponsive to touches when the overlay is active. If you experience this, try lowering the opacity or temporarily stopping the overlay.
 
+## Roadmap & Future Ideas
+> [!TIP]
+> Since this project is AI-assisted and fully open-source, here are some ideas for future contributors (or future versions) to explore:
+> 
+> **Data & Control:**
+> - **Import/Export Configs:** Add a feature to export your custom node layouts to a JSON file, allowing users to share their setups (or backup their layouts).
+> - **WebSocket Relay:** Build a background service that listens for WebSocket commands, allowing users to control the nodes or read telemetry remotely from a PC or a secondary device.
+> - **Tasker/Shortcuts Integration:** Expose an Intent API so users can toggle specific nodes on/off using automation apps like Tasker or MacroDroid.
+> 
+> **Visuals & Themes:**
+> - **Glyph Interface Sync:** Make the dots pulse or change color in sync with the physical Glyph lights on the back of the phone.
+> - **Custom Themes:** Add pre-configured themes (e.g., "Cyberpunk", "Matrix", "Ghost") with unique colors and animations.
+> - **Clock/Text Modes:** Allow the 5 dots to temporarily morph into a mini NDot clock or display scrolling text.
+> 
+> **Hardware & Optimization:**
+> - **Auto-Hide for Apps:** Automatically hide the overlay when specific apps are open (like the Camera or games), instead of just landscape mode.
+> - **Battery Optimization Modes:** Add an extreme power-saving mode that only updates the nodes when the screen is unlocked.
+
 ## Features
 
 - **Dynamic Hardware Nodes**:
