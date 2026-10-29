@@ -3,8 +3,20 @@ name: Android CI
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
+    paths-ignore:
+      - "README.md"
+      - ".github/**"
+      - "docs/**"
+      - "*.md"
   pull_request:
     branches: [ "main", "master" ]
+    paths-ignore:
+      - "README.md"
+      - ".github/**"
+      - "docs/**"
+      - "*.md"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -55,7 +67,7 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Prepare Release APKs
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
         run: |
           cp app/build/outputs/apk/debug/app-universal-debug.apk app/build/outputs/apk/debug/xnode-debug.apk || cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk app/build/outputs/apk/debug/xnode-debug.apk || true
           cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk app/build/outputs/apk/debug/xnode-arm64-v8a-debug.apk || true
@@ -63,13 +75,13 @@ jobs:
           cp app/build/outputs/apk/debug/app-x86_64-debug.apk app/build/outputs/apk/debug/xnode-x86_64-debug.apk || true
 
       - name: Publish APK to Releases
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           name: "Latest Debug Build"
-          tag_name: "v1.0.0-build-${{ github.run_number }}"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v1.0.0-build-{0}', github.run_number) }}
           prerelease: true
           files: |
             app/build/outputs/apk/debug/xnode-debug.apk
