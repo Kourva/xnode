@@ -27,9 +27,27 @@ class NotchOverlayView(context: Context) : View(context) {
 
     var config: NotchConfig = NotchConfig()
         set(value) {
+            val activeNodeIds = value.nodes.map { it.id }.toSet()
+            val iterator = runningAnimators.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                if (entry.key !in activeNodeIds) {
+                    entry.value.cancel()
+                    iterator.remove()
+                }
+            }
             field = value
+            recalculateDotPositions()
             invalidate()
         }
+
+    // Precomputed dot positions per active node to ensure zero allocations and zero sorting in onDraw
+    private data class CachedNode(
+        val node: NodeConfig,
+        val dots: List<DotPoint>
+    )
+
+    private var cachedNodes: List<CachedNode> = emptyList()
 
     // Animated ratios per node ID
     private val animatedRatios = mutableMapOf<String, Float>()
@@ -123,20 +141,31 @@ class NotchOverlayView(context: Context) : View(context) {
 
     private fun checkCutoutInsets(insets: WindowInsets?) {
         if (insets == null) return
+        var changed = false
         val cutout = insets.displayCutout
         if (cutout != null && cutout.boundingRects.isNotEmpty()) {
             val rect = cutout.boundingRects[0]
-            cutoutOriginX = rect.exactCenterX()
-            cutoutOriginY = rect.exactCenterY()
-            cutoutWidth = rect.width().toFloat()
-            hasCutout = true
-            invalidate()
+            val newX = rect.exactCenterX()
+            val newY = rect.exactCenterY()
+            val newW = rect.width().toFloat()
+            if (cutoutOriginX != newX || cutoutOriginY != newY || cutoutWidth != newW || !hasCutout) {
+                cutoutOriginX = newX
+                cutoutOriginY = newY
+                cutoutWidth = newW
+                hasCutout = true
+                changed = true
+            }
         } else if (cutoutOriginX < 0) {
             val statusBarTop = insets.getInsets(WindowInsets.Type.statusBars()).top
             cutoutOriginX = resources.displayMetrics.widthPixels / 2f
             cutoutOriginY = if (statusBarTop > 0) statusBarTop / 2f else (24f * resources.displayMetrics.density)
             cutoutWidth = 24f * resources.displayMetrics.density
             hasCutout = false
+            changed = true
+        }
+
+        if (changed) {
+            recalculateDotPositions()
             invalidate()
         }
     }
@@ -154,23 +183,87 @@ class NotchOverlayView(context: Context) : View(context) {
             cutoutWidth = 24f * resources.displayMetrics.density
         }
         checkCutoutInsets(rootWindowInsets)
+        recalculateDotPositions()
+    }
+
+    /**
+     * Precomputes dot positions and sorts them once, avoiding heavy calculations
+     * and array allocations inside onDraw() for 60fps performance.
+     */
+    private fun recalculateDotPositions() {
+        val density = resources.displayMetrics.density
+        val baseCenterX = if (cutoutOriginX > 0) cutoutOriginX else (width.takeIf { it > 0 }?.toFloat() ?: 1080f) / 2f
+        val baseCenterY = if (cutoutOriginY > 0) cutoutOriginY else 24f * density
+        val defaultHoleRadius = if (cutoutWidth > 0) cutoutWidth / 2f else 12f * density
+        val dotRadius = 1.8f * density
+        val gapPx = 2.5f
+
+        val newCached = mutableListOf<CachedNode>()
+
+        config.nodes.forEach { node ->
+            if (!node.enabled) return@forEach
+
+            val n = node.dotCount.coerceIn(2, 5)
+            val dots = when (node.shape) {
+                NodeShape.ARC -> {
+                    val radiusPx = node.sizeDp * density
+                    val targetChord = (2f * dotRadius) + gapPx
+                    val stepRad = 2.0 * asin((targetChord / (2.0 * radiusPx)).coerceIn(0.04, 0.45))
+                    val stepDeg = Math.toDegrees(stepRad)
+                    val centerAngle = if (node.direction == NodeDirection.LEFT) 180.0 else 0.0
+                    val nodeCenterX = baseCenterX + (node.positionXDp * density)
+                    val nodeCenterY = baseCenterY + (node.positionYDp * density)
+
+                    val rawDots = mutableListOf<DotPoint>()
+                    for (i in 0 until n) {
+                        val offsetIndex = i - (n - 1) / 2.0
+                        val angleDeg = centerAngle + (offsetIndex * stepDeg)
+                        val rad = Math.toRadians(angleDeg)
+                        val x = nodeCenterX + (radiusPx * cos(rad)).toFloat()
+                        val y = nodeCenterY + (radiusPx * sin(rad)).toFloat()
+                        rawDots.add(DotPoint(x, y))
+                    }
+                    rawDots.sortedByDescending { it.y }
+                }
+                NodeShape.STRAIGHT -> {
+                    val lengthPx = node.sizeDp * density
+                    val baseSideOffset = if (node.direction == NodeDirection.LEFT) {
+                        -(defaultHoleRadius + 6f * density)
+                    } else {
+                        +(defaultHoleRadius + 6f * density)
+                    }
+                    val nodeCenterX = baseCenterX + baseSideOffset + (node.positionXDp * density)
+                    val nodeCenterY = baseCenterY + (node.positionYDp * density)
+
+                    val stepY = if (n > 1) lengthPx / (n - 1) else 0f
+                    // Center the vertical column of dots on nodeCenterY across 2, 3, 4, or 5 dots
+                    val totalColumnHeight = if (n > 1) (n - 1) * stepY else 0f
+                    val startY = nodeCenterY - (totalColumnHeight / 2f)
+
+                    val rawDots = mutableListOf<DotPoint>()
+                    for (i in 0 until n) {
+                        val y = startY + (i * stepY)
+                        rawDots.add(DotPoint(nodeCenterX, y))
+                    }
+                    rawDots.sortedByDescending { it.y }
+                }
+            }
+
+            newCached.add(CachedNode(node, dots))
+        }
+
+        cachedNodes = newCached
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
         val density = resources.displayMetrics.density
-        val baseCenterX = if (cutoutOriginX > 0) cutoutOriginX else width / 2f
-        val baseCenterY = if (cutoutOriginY > 0) cutoutOriginY else 24f * density
-        val defaultHoleRadius = if (cutoutWidth > 0) cutoutWidth / 2f else 12f * density
+        val dotRadius = 1.8f * density
 
-        // 1. Ghost mode styling: #111111 when ON, #3D3D3D when OFF
+        // Ghost mode styling: #111111 when ON, #3D3D3D when OFF
         val unfilledColorInt = if (config.ghostMode) Color.parseColor("#111111") else Color.parseColor("#3D3D3D")
         basePaint.color = unfilledColorInt
-
-        // Scaled dot radius (1.8dp)
-        val dotRadius = 1.8f * density
-        val gapPx = 2.5f
 
         // Check active rainbow mode (Easter egg shake)
         val now = System.currentTimeMillis()
@@ -181,12 +274,17 @@ class NotchOverlayView(context: Context) : View(context) {
         val rainbowHue = ((now % 1000L) / 1000f) * 360f
         val rainbowColor = Color.HSVToColor(floatArrayOf(rainbowHue, 1.0f, 1.0f))
 
-        // Draw each enabled custom node
-        config.nodes.forEach { node ->
-            if (!node.enabled) return@forEach
+        // Draw each cached node
+        for (cached in cachedNodes) {
+            val node = cached.node
 
+            // Skip drawing NET_IN or NET_OUT nodes if network is idle
             val isNetNode = node.metric == MetricType.NET_IN || node.metric == MetricType.NET_OUT
-            val ratio = if (isNetNode && isNetworkIdle) 0.0f else (animatedRatios[node.id] ?: 0.5f)
+            if (isNetNode && isNetworkIdle) {
+                continue
+            }
+
+            val ratio = animatedRatios[node.id] ?: 0.5f
 
             // Dynamic effects detection
             val isBatCharging = node.metric == MetricType.BAT && isCharging
@@ -196,7 +294,7 @@ class NotchOverlayView(context: Context) : View(context) {
                 postInvalidateOnAnimation()
             }
 
-            // Determine active color based on static vs dynamic vs rainbow vs temp warning
+            // Determine active color
             val activeColorInt = if (isRainbow) {
                 rainbowColor
             } else if (isTempWarning) {
@@ -208,113 +306,8 @@ class NotchOverlayView(context: Context) : View(context) {
                 node.staticColor
             }
 
-            when (node.shape) {
-                NodeShape.ARC -> {
-                    drawArcNode(
-                        canvas = canvas,
-                        node = node,
-                        baseCenterX = baseCenterX,
-                        baseCenterY = baseCenterY,
-                        density = density,
-                        dotRadius = dotRadius,
-                        gapPx = gapPx,
-                        activeColor = activeColorInt,
-                        ratio = ratio,
-                        isBatCharging = isBatCharging
-                    )
-                }
-                NodeShape.STRAIGHT -> {
-                    drawStraightNode(
-                        canvas = canvas,
-                        node = node,
-                        baseCenterX = baseCenterX,
-                        baseCenterY = baseCenterY,
-                        density = density,
-                        dotRadius = dotRadius,
-                        defaultHoleRadius = defaultHoleRadius,
-                        activeColor = activeColorInt,
-                        ratio = ratio,
-                        isBatCharging = isBatCharging
-                    )
-                }
-            }
+            renderDots(canvas, cached.dots, dotRadius, activeColorInt, ratio, cached.dots.size, isBatCharging, now)
         }
-    }
-
-    private fun drawArcNode(
-        canvas: Canvas,
-        node: NodeConfig,
-        baseCenterX: Float,
-        baseCenterY: Float,
-        density: Float,
-        dotRadius: Float,
-        gapPx: Float,
-        activeColor: Int,
-        ratio: Float,
-        isBatCharging: Boolean
-    ) {
-        val n = node.dotCount.coerceIn(2, 5)
-        val radiusPx = node.sizeDp * density
-        val targetChord = (2f * dotRadius) + gapPx
-        val stepRad = 2.0 * asin((targetChord / (2.0 * radiusPx)).coerceIn(0.04, 0.45))
-        val stepDeg = Math.toDegrees(stepRad)
-
-        val centerAngle = if (node.direction == NodeDirection.LEFT) 180.0 else 0.0
-        val nodeCenterX = baseCenterX + (node.positionXDp * density)
-        val nodeCenterY = baseCenterY + (node.positionYDp * density)
-
-        val rawDots = mutableListOf<DotPoint>()
-        for (i in 0 until n) {
-            val offsetIndex = i - (n - 1) / 2.0
-            val angleDeg = centerAngle + (offsetIndex * stepDeg)
-            val rad = Math.toRadians(angleDeg)
-            val x = nodeCenterX + (radiusPx * cos(rad)).toFloat()
-            val y = nodeCenterY + (radiusPx * sin(rad)).toFloat()
-            rawDots.add(DotPoint(x, y))
-        }
-
-        // Sort dots from bottom to top (decreasing Y)
-        val sortedDots = rawDots.sortedByDescending { it.y }
-        renderDots(canvas, sortedDots, dotRadius, activeColor, ratio, n, isBatCharging)
-    }
-
-    private fun drawStraightNode(
-        canvas: Canvas,
-        node: NodeConfig,
-        baseCenterX: Float,
-        baseCenterY: Float,
-        density: Float,
-        dotRadius: Float,
-        defaultHoleRadius: Float,
-        activeColor: Int,
-        ratio: Float,
-        isBatCharging: Boolean
-    ) {
-        val n = node.dotCount.coerceIn(2, 5)
-        val lengthPx = node.sizeDp * density
-
-        // If direction is LEFT, default to the left of the cutout; if RIGHT, default to the right
-        val baseSideOffset = if (node.direction == NodeDirection.LEFT) {
-            -(defaultHoleRadius + 6f * density)
-        } else {
-            +(defaultHoleRadius + 6f * density)
-        }
-
-        val nodeCenterX = baseCenterX + baseSideOffset + (node.positionXDp * density)
-        val nodeCenterY = baseCenterY + (node.positionYDp * density)
-
-        val rawDots = mutableListOf<DotPoint>()
-        val halfLength = lengthPx / 2f
-        val stepY = if (n > 1) lengthPx / (n - 1) else 0f
-
-        for (i in 0 until n) {
-            val y = (nodeCenterY - halfLength) + (i * stepY)
-            rawDots.add(DotPoint(nodeCenterX, y))
-        }
-
-        // Sort dots from bottom to top (decreasing Y)
-        val sortedDots = rawDots.sortedByDescending { it.y }
-        renderDots(canvas, sortedDots, dotRadius, activeColor, ratio, n, isBatCharging)
     }
 
     private fun renderDots(
@@ -324,10 +317,10 @@ class NotchOverlayView(context: Context) : View(context) {
         activeColor: Int,
         ratio: Float,
         n: Int,
-        isBatCharging: Boolean
+        isBatCharging: Boolean,
+        now: Long
     ) {
         val totalFill = ratio.coerceIn(0f, 1f) * n
-        val now = System.currentTimeMillis()
 
         for (i in 0 until n) {
             val pt = sortedDots[i]

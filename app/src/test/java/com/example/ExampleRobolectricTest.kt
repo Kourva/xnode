@@ -39,6 +39,13 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `verify launcher background is pure white`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val color = androidx.core.content.ContextCompat.getColor(context, R.color.ic_launcher_background)
+        assertEquals(0xFFFFFFFF.toInt(), color)
+    }
+
+    @Test
     fun `verify font loading`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val ndot = ResourcesCompat.getFont(context, R.font.ndot_55)
@@ -59,6 +66,7 @@ class ExampleRobolectricTest {
         assertTrue(config.nodes.isNotEmpty())
         assertTrue(config.pocketModeEnabled)
         assertEquals(5.0f, config.maxNetSpeedMB, 0.01f)
+        assertEquals(2, config.updateIntervalSeconds)
 
         val first = config.nodes[0]
         assertEquals(MetricType.CPU, first.metric)
@@ -107,6 +115,7 @@ class ExampleRobolectricTest {
             pocketModeEnabled = false,
             ghostMode = true,
             maxNetSpeedMB = 10.0f,
+            updateIntervalSeconds = 4,
             nodes = testNodes
         )
 
@@ -116,6 +125,7 @@ class ExampleRobolectricTest {
         assertEquals(false, loaded.pocketModeEnabled)
         assertTrue(loaded.ghostMode)
         assertEquals(10.0f, loaded.maxNetSpeedMB, 0.01f)
+        assertEquals(4, loaded.updateIntervalSeconds)
         assertEquals(2, loaded.nodes.size)
 
         val n1 = loaded.nodes[0]

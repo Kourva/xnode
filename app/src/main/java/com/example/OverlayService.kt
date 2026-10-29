@@ -314,8 +314,9 @@ class OverlayService : Service() {
                     netIdle = isNetIdle
                 )
 
-                // Network Idle Sleep: if idle, poll slower to conserve resources
-                val loopDelay = if (isNetIdle) 3500L else 1500L
+                // Dynamic update interval: user-configured interval (1s to 10s)
+                val intervalMs = (currentConfig.updateIntervalSeconds * 1000L).coerceIn(1000L, 10000L)
+                val loopDelay = if (isNetIdle) (intervalMs * 2).coerceAtMost(20000L) else intervalMs
                 delay(loopDelay)
             }
         }
@@ -364,6 +365,13 @@ class OverlayService : Service() {
         _isRunning.value = false
         pauseMetricsLoop()
         serviceScope.cancel()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
 
         try {
             sensorManager?.unregisterListener(sensorEventListener)

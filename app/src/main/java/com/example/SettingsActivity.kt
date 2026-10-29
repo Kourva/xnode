@@ -14,6 +14,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,9 +29,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,11 +46,11 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -59,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,9 +70,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -79,6 +85,9 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.model.MetricType
 import com.example.model.NodeConfig
 import com.example.model.NodeDirection
@@ -86,6 +95,8 @@ import com.example.model.NodeShape
 import com.example.model.NotchConfig
 import com.example.model.NotchPreferences
 import com.example.service.MetricsCollector
+import com.example.ui.GlobalSettingsScreen
+import com.example.ui.rememberHapticFeedbackHelper
 import com.example.ui.theme.GeistMonoFontFamily
 import com.example.ui.theme.MainSystemFontFamily
 import com.example.ui.theme.NDotFontFamily
@@ -109,7 +120,7 @@ class SettingsActivity : ComponentActivity() {
                 darkTheme = systemDark,
                 extraDark = extraDarkEnabled
             ) {
-                SettingsScreen(
+                MainContent(
                     extraDarkEnabled = extraDarkEnabled,
                     onToggleExtraDark = { extraDarkEnabled = it }
                 )
@@ -119,14 +130,56 @@ class SettingsActivity : ComponentActivity() {
 }
 
 @Composable
-fun SettingsScreen(
+fun MainContent(
     extraDarkEnabled: Boolean,
     onToggleExtraDark: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val navController = rememberNavController()
+    var config by remember { mutableStateOf(NotchPreferences.loadConfig(context)) }
+
+    fun updateConfig(newConfig: NotchConfig) {
+        config = newConfig
+        NotchPreferences.saveConfig(context, newConfig)
+    }
+
+    NavHost(
+        navController = navController,
+        startDestination = "main",
+        enterTransition = { slideInHorizontally { it } },
+        exitTransition = { slideOutHorizontally { -it / 3 } },
+        popEnterTransition = { slideInHorizontally { -it / 3 } },
+        popExitTransition = { slideOutHorizontally { it } }
+    ) {
+        composable("main") {
+            SettingsScreen(
+                config = config,
+                onUpdateConfig = { updateConfig(it) },
+                onOpenGlobalSettings = { navController.navigate("global_settings") }
+            )
+        }
+        composable("global_settings") {
+            GlobalSettingsScreen(
+                config = config,
+                extraDarkEnabled = extraDarkEnabled,
+                onToggleExtraDark = onToggleExtraDark,
+                onUpdateConfig = { updateConfig(it) },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(
+    config: NotchConfig,
+    onUpdateConfig: (NotchConfig) -> Unit,
+    onOpenGlobalSettings: () -> Unit
+) {
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val colors = XNodeTheme.colors
-    val systemDark = isSystemInDarkTheme()
+    val haptic = rememberHapticFeedbackHelper()
 
     var hasOverlayPermission by remember {
         mutableStateOf(Settings.canDrawOverlays(context))
@@ -143,8 +196,6 @@ fun SettingsScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-
-    var config by remember { mutableStateOf(NotchPreferences.loadConfig(context)) }
 
     val isRunning by OverlayService.isRunning.collectAsState()
     val liveMetrics by OverlayService.metricRatios.collectAsState()
@@ -179,11 +230,6 @@ fun SettingsScreen(
         OverlayService.start(context)
     }
 
-    fun updateConfig(newConfig: NotchConfig) {
-        config = newConfig
-        NotchPreferences.saveConfig(context, newConfig)
-    }
-
     fun handleToggleOverlay() {
         if (isRunning) {
             OverlayService.stop(context)
@@ -216,273 +262,278 @@ fun SettingsScreen(
         }
     }
 
+    fun openGitHub() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kourva/xnode")).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            context.startActivity(intent)
+        } catch (_: Exception) {}
+    }
+
     Scaffold(
         containerColor = colors.background,
         contentColor = colors.textPrimary,
-        contentWindowInsets = WindowInsets.systemBars
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.background)
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Bar: "xnode" (NDot) + Subtitle "system resource telemetry." (Geist, #8A8A8A)
+            // Scrollable Column for Header and Dynamic Node List
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Header: Transparent background
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = "xnode",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = colors.textPrimary,
-                            fontFamily = NDotFontFamily,
-                            modifier = Modifier.testTag("app_title")
-                        )
-                        Text(
-                            text = "system resource telemetry.",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = Color(0xFF8A8A8A),
-                            fontFamily = MainSystemFontFamily
-                        )
-                    }
-
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Global "Pocket Mode" switch
+                        Column {
+                            Text(
+                                text = "XNODE".uppercase(),
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = colors.textPrimary,
+                                fontFamily = NDotFontFamily,
+                                modifier = Modifier.testTag("app_title")
+                            )
+                            Text(
+                                text = "system resource telemetry.",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFF8A8A8A),
+                                fontFamily = MainSystemFontFamily
+                            )
+                        }
+
+                        // Header Action Icons: GitHub and Settings (Gear)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(
-                                text = "Pocket",
-                                fontSize = 11.sp,
-                                fontFamily = MainSystemFontFamily,
-                                fontWeight = FontWeight.Normal,
-                                color = colors.textSecondary
-                            )
-                            Switch(
-                                checked = config.pocketModeEnabled,
-                                onCheckedChange = { updateConfig(config.copy(pocketModeEnabled = it)) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color(0xFF000000),
-                                    checkedTrackColor = Color(0xFFE8E8E8),
-                                    uncheckedThumbColor = Color(0xFF8A8A8A),
-                                    uncheckedTrackColor = Color(0xFF2A2A2A)
-                                ),
-                                modifier = Modifier.testTag("toggle_pocket_mode")
-                            )
-                        }
-
-                        // Global "Ghost Mode" switch
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Ghost",
-                                fontSize = 11.sp,
-                                fontFamily = MainSystemFontFamily,
-                                fontWeight = FontWeight.Normal,
-                                color = colors.textSecondary
-                            )
-                            Switch(
-                                checked = config.ghostMode,
-                                onCheckedChange = { updateConfig(config.copy(ghostMode = it)) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color(0xFF000000),
-                                    checkedTrackColor = Color(0xFFE8E8E8),
-                                    uncheckedThumbColor = Color(0xFF8A8A8A),
-                                    uncheckedTrackColor = Color(0xFF2A2A2A)
-                                ),
-                                modifier = Modifier.testTag("toggle_ghost_mode")
-                            )
-                        }
-
-                        if (systemDark) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            IconButton(
+                                onClick = {
+                                    haptic.click()
+                                    openGitHub()
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("header_github_button")
                             ) {
-                                Text(
-                                    text = "Dark",
-                                    fontSize = 11.sp,
-                                    fontFamily = MainSystemFontFamily,
-                                    fontWeight = FontWeight.Normal,
-                                    color = colors.textSecondary
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_github),
+                                    contentDescription = "Open GitHub repository",
+                                    tint = colors.textPrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Switch(
-                                    checked = extraDarkEnabled,
-                                    onCheckedChange = onToggleExtraDark,
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color(0xFF000000),
-                                        checkedTrackColor = Color(0xFFE8E8E8),
-                                        uncheckedThumbColor = Color(0xFF8A8A8A),
-                                        uncheckedTrackColor = Color(0xFF2A2A2A)
-                                    ),
-                                    modifier = Modifier.testTag("toggle_extra_dark")
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    haptic.click()
+                                    onOpenGlobalSettings()
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("open_settings_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Open Global Settings",
+                                    tint = colors.textPrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                     }
+
+                    // Real-Time System Stats Readout
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.surface)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .testTag("system_stats_box")
+                    ) {
+                        Text(
+                            text = if (isRunning) liveStatsSummary else localStatsSummary,
+                            fontSize = 12.sp,
+                            fontFamily = GeistMonoFontFamily,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF8A8A8A),
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.testTag("system_stats_readout")
+                        )
+                    }
+                }
+
+                // Dynamic Node List (gray #1A1A1A surface cards, 16dp radius, no borders)
+                config.nodes.forEachIndexed { index, node ->
+                    DynamicNodeCard(
+                        node = node,
+                        index = index,
+                        currentRatio = getMetricRatio(node.metric),
+                        onUpdate = { updatedNode ->
+                            val newNodes = config.nodes.toMutableList()
+                            newNodes[index] = updatedNode
+                            onUpdateConfig(config.copy(nodes = newNodes))
+                        },
+                        onDelete = {
+                            val newNodes = config.nodes.toMutableList()
+                            newNodes.removeAt(index)
+                            onUpdateConfig(config.copy(nodes = newNodes))
+                        }
+                    )
+                }
+
+                if (!hasOverlayPermission) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.surface)
+                            .padding(14.dp)
+                    ) {
+                        Text(
+                            text = "Permission required:\nSYSTEM_ALERT_WINDOW is needed to draw over the camera notch. Tap 'Start overlay' to grant.",
+                            fontSize = 12.sp,
+                            fontFamily = MainSystemFontFamily,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFFFF9500),
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
             }
 
-            // Real-Time System Stats Readout (replaces former Arc Preview)
-            // Left-aligned, Geist Mono font, #8A8A8A color, small text size: "CPU: 24% | MEM: 4.2GB | BAT: 85%"
+            // Top fade overlay (gradient from #000000 to transparent) so status bar icons remain visible
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .border(1.dp, colors.border, RoundedCornerShape(12.dp))
-                    .background(colors.innerCard)
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .testTag("system_stats_box")
+                    .height(48.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xDD000000),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // Sticky Footer (Aligned to BottomCenter)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0xCC000000),
+                                Color(0xFF000000),
+                                Color(0xFF000000)
+                            )
+                        )
+                    )
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Row 1: Action Buttons (Start/Stop pill button + Add node circle button)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Left Button: Start/Stop pill shape
+                    Button(
+                        onClick = {
+                            haptic.click()
+                            handleToggleOverlay()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .testTag("toggle_overlay_button"),
+                        shape = RoundedCornerShape(999.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isRunning) Color(0xFFFF3B30) else Color(0xFFFFFFFF),
+                            contentColor = if (isRunning) Color(0xFFFFFFFF) else Color(0xFF000000)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp
+                        )
+                    ) {
+                        Text(
+                            text = if (isRunning) "Stop overlay" else "Start overlay",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = MainSystemFontFamily,
+                            color = if (isRunning) Color(0xFFFFFFFF) else Color(0xFF000000)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Right Button: Perfect circle (44dp x 44dp), surface background #1A1A1A, white + icon
+                    IconButton(
+                        onClick = {
+                            haptic.click()
+                            val newNode = NodeConfig.createNew(config.nodes.size)
+                            onUpdateConfig(config.copy(nodes = config.nodes + newNode))
+                        },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1A1A1A))
+                            .testTag("add_node_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add New Node",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Row 2: Footer Label
                 Text(
-                    text = if (isRunning) liveStatsSummary else localStatsSummary,
-                    fontSize = 12.sp,
+                    text = "XNODE // AI-GENERATED, INSPIRED BY NOTHING, BY KOURVA",
+                    fontSize = 10.sp,
                     fontFamily = GeistMonoFontFamily,
                     fontWeight = FontWeight.Normal,
                     color = Color(0xFF8A8A8A),
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.testTag("system_stats_readout")
-                )
-            }
-
-            // Global Max Network Speed Setting (for NET IN / NET OUT normalization: 100 KB/s to 50 MB/s)
-            ResetSliderRow(
-                label = "Max network speed (scaling)",
-                value = config.maxNetSpeedMB,
-                defaultValue = 5.0f,
-                valueRange = 0.1f..50.0f,
-                unit = "MB/s",
-                isSigned = false,
-                testTag = "global_max_net_speed",
-                accentColor = Color(0xFF0A84FF),
-                customFormatter = { v ->
-                    if (v < 1.0f) {
-                        "${(v * 1000f).roundToInt()} KB/s"
-                    } else {
-                        String.format(java.util.Locale.US, "%.1f MB/s", v)
-                    }
-                },
-                onReset = { updateConfig(config.copy(maxNetSpeedMB = 5.0f)) },
-                onValueChange = { updateConfig(config.copy(maxNetSpeedMB = it)) }
-            )
-
-            // Dynamic Node List
-            config.nodes.forEachIndexed { index, node ->
-                DynamicNodeCard(
-                    node = node,
-                    index = index,
-                    currentRatio = getMetricRatio(node.metric),
-                    onUpdate = { updatedNode ->
-                        val newNodes = config.nodes.toMutableList()
-                        newNodes[index] = updatedNode
-                        updateConfig(config.copy(nodes = newNodes))
-                    },
-                    onDelete = {
-                        val newNodes = config.nodes.toMutableList()
-                        newNodes.removeAt(index)
-                        updateConfig(config.copy(nodes = newNodes))
-                    }
-                )
-            }
-
-            // "+ Add New Node" Button (Starts at X: 0, Y: 0, Size: minimum value 20dp)
-            OutlinedButton(
-                onClick = {
-                    val newNode = NodeConfig.createNew(config.nodes.size)
-                    updateConfig(config.copy(nodes = config.nodes + newNode))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .testTag("add_node_button"),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = colors.surface,
-                    contentColor = colors.textPrimary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add New Node",
-                    modifier = Modifier.size(16.dp),
-                    tint = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Add new node",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = MainSystemFontFamily,
-                    color = colors.textPrimary
-                )
-            }
-
-            // Full-width pill button "Start overlay" / "Stop overlay"
-            Button(
-                onClick = { handleToggleOverlay() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .testTag("toggle_overlay_button"),
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (colors.isDark) Color(0xFFE8E8E8) else Color(0xFF0D0D0D),
-                    contentColor = if (colors.isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 0.dp,
-                    pressedElevation = 0.dp
-                )
-            ) {
-                Text(
-                    text = if (isRunning) "Stop overlay" else "Start overlay",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = MainSystemFontFamily,
-                    color = if (colors.isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
-                )
-            }
-
-            if (!hasOverlayPermission) {
-                Box(
+                    letterSpacing = 1.sp,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(1.dp, colors.border, RoundedCornerShape(16.dp))
-                        .background(colors.surface)
-                        .padding(14.dp)
-                ) {
-                    Text(
-                        text = "Permission required:\nSYSTEM_ALERT_WINDOW is needed to draw over the camera notch. Tap 'Start overlay' to grant.",
-                        fontSize = 12.sp,
-                        fontFamily = MainSystemFontFamily,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFFFF9500),
-                        lineHeight = 16.sp
-                    )
-                }
+                        .clickable {
+                            haptic.click()
+                            openGitHub()
+                        }
+                        .padding(top = 10.dp, bottom = 4.dp)
+                        .testTag("footer_label")
+                )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -496,13 +547,14 @@ fun DynamicNodeCard(
     onDelete: () -> Unit
 ) {
     val colors = XNodeTheme.colors
+    val haptic = rememberHapticFeedbackHelper()
     var expanded by remember { mutableStateOf(true) }
 
+    // Nothing OS Style: Surface gray background, 16dp rounded corners, outer border REMOVED
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(16.dp))
             .background(colors.surface)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -516,7 +568,10 @@ fun DynamicNodeCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.clickable { expanded = !expanded }
+                modifier = Modifier.clickable {
+                    haptic.click()
+                    expanded = !expanded
+                }
             ) {
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -546,7 +601,10 @@ fun DynamicNodeCard(
             ) {
                 // Preview button (1-second sweep)
                 IconButton(
-                    onClick = { OverlayService.triggerPreview(node.id) },
+                    onClick = {
+                        haptic.click()
+                        OverlayService.triggerPreview(node.id)
+                    },
                     modifier = Modifier
                         .size(32.dp)
                         .testTag("node_${index}_preview")
@@ -562,7 +620,10 @@ fun DynamicNodeCard(
                 // Enable/Disable switch
                 Switch(
                     checked = node.enabled,
-                    onCheckedChange = { onUpdate(node.copy(enabled = it)) },
+                    onCheckedChange = {
+                        haptic.click()
+                        onUpdate(node.copy(enabled = it))
+                    },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color(0xFF000000),
                         checkedTrackColor = Color(0xFFE8E8E8),
@@ -574,7 +635,10 @@ fun DynamicNodeCard(
 
                 // Delete button
                 IconButton(
-                    onClick = onDelete,
+                    onClick = {
+                        haptic.click()
+                        onDelete()
+                    },
                     modifier = Modifier
                         .size(32.dp)
                         .testTag("node_${index}_delete")
@@ -623,7 +687,10 @@ fun DynamicNodeCard(
                                         colors.innerCard
                                     }
                                 )
-                                .clickable { onUpdate(node.copy(metric = metric)) }
+                                .clickable {
+                                    haptic.click()
+                                    onUpdate(node.copy(metric = metric))
+                                }
                                 .testTag("node_${index}_metric_${metric.name.lowercase()}"),
                             contentAlignment = Alignment.Center
                         ) {
@@ -671,7 +738,10 @@ fun DynamicNodeCard(
                                         colors.innerCard
                                     }
                                 )
-                                .clickable { onUpdate(node.copy(metric = metric)) }
+                                .clickable {
+                                    haptic.click()
+                                    onUpdate(node.copy(metric = metric))
+                                }
                                 .testTag("node_${index}_metric_${metric.name.lowercase()}"),
                             contentAlignment = Alignment.Center
                         ) {
@@ -730,7 +800,10 @@ fun DynamicNodeCard(
                                     .weight(1f)
                                     .height(34.dp)
                                     .background(if (isSel) (if (colors.isDark) Color(0xFFE8E8E8) else Color(0xFF0D0D0D)) else colors.innerCard)
-                                    .clickable { onUpdate(node.copy(shape = s)) }
+                                    .clickable {
+                                        haptic.click()
+                                        onUpdate(node.copy(shape = s))
+                                    }
                                     .testTag("node_${index}_shape_${s.name.lowercase()}"),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -774,7 +847,10 @@ fun DynamicNodeCard(
                                     .weight(1f)
                                     .height(34.dp)
                                     .background(if (isSel) (if (colors.isDark) Color(0xFFE8E8E8) else Color(0xFF0D0D0D)) else colors.innerCard)
-                                    .clickable { onUpdate(node.copy(direction = d)) }
+                                    .clickable {
+                                        haptic.click()
+                                        onUpdate(node.copy(direction = d))
+                                    }
                                     .testTag("node_${index}_direction_${d.name.lowercase()}"),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -819,7 +895,10 @@ fun DynamicNodeCard(
                                     if (isSel) (if (colors.isDark) Color(0xFFE8E8E8) else Color(0xFF0D0D0D))
                                     else colors.innerCard
                                 )
-                                .clickable { onUpdate(node.copy(dotCount = count)) }
+                                .clickable {
+                                    haptic.click()
+                                    onUpdate(node.copy(dotCount = count))
+                                }
                                 .testTag("node_${index}_dot_count_$count"),
                             contentAlignment = Alignment.Center
                         ) {
@@ -905,7 +984,10 @@ fun DynamicNodeCard(
                                     if (isSel) (if (colors.isDark) Color(0xFFE8E8E8) else Color(0xFF0D0D0D))
                                     else colors.innerCard
                                 )
-                                .clickable { onUpdate(node.copy(isDynamicColor = isDyn)) }
+                                .clickable {
+                                    haptic.click()
+                                    onUpdate(node.copy(isDynamicColor = isDyn))
+                                }
                                 .testTag("node_${index}_colormode_${label.lowercase()}"),
                             contentAlignment = Alignment.Center
                         ) {
@@ -971,6 +1053,7 @@ fun ColorWheelPicker(
     onColorSelected: (Int) -> Unit
 ) {
     val colors = XNodeTheme.colors
+    val haptic = rememberHapticFeedbackHelper()
     var hexText by remember(selectedColor) {
         mutableStateOf(String.format("%06X", (0xFFFFFF and selectedColor)))
     }
@@ -979,7 +1062,6 @@ fun ColorWheelPicker(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(10.dp))
             .background(colors.innerCard)
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1007,7 +1089,6 @@ fun ColorWheelPicker(
                         .size(16.dp)
                         .clip(CircleShape)
                         .background(Color(selectedColor))
-                        .border(1.dp, colors.border, CircleShape)
                 )
                 Text(
                     text = "#",
@@ -1053,7 +1134,10 @@ fun ColorWheelPicker(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clickable { onColorSelected(colorInt) }
+                        .clickable {
+                            haptic.click()
+                            onColorSelected(colorInt)
+                        }
                         .testTag("${testTagPrefix}_swatch_$i"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1091,6 +1175,9 @@ fun ResetSliderRow(
     onValueChange: (Float) -> Unit
 ) {
     val colors = XNodeTheme.colors
+    val haptic = rememberHapticFeedbackHelper()
+    var lastTickVal by remember { mutableFloatStateOf(value) }
+
     val formattedValue = customFormatter?.invoke(value) ?: if (isSigned) {
         "${String.format("%+.0f", value)} $unit"
     } else {
@@ -1101,7 +1188,6 @@ fun ResetSliderRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(10.dp))
             .background(colors.innerCard)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1136,9 +1222,11 @@ fun ResetSliderRow(
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .border(1.dp, colors.border, CircleShape)
                         .background(colors.surface)
-                        .clickable { onReset() }
+                        .clickable {
+                            haptic.click()
+                            onReset()
+                        }
                         .testTag("${testTag}_reset"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1158,7 +1246,13 @@ fun ResetSliderRow(
 
         Slider(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { newVal ->
+                if (abs(newVal - lastTickVal) >= 1.0f) {
+                    haptic.tick()
+                    lastTickVal = newVal
+                }
+                onValueChange(newVal)
+            },
             valueRange = valueRange,
             modifier = Modifier
                 .fillMaxWidth()

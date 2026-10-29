@@ -143,6 +143,7 @@ data class NotchConfig(
     val pocketModeEnabled: Boolean = true,
     val ghostMode: Boolean = false,
     val maxNetSpeedMB: Float = 5.0f,
+    val updateIntervalSeconds: Int = 2,
     val nodes: List<NodeConfig> = emptyList()
 )
 
@@ -151,6 +152,7 @@ object NotchPreferences {
     private const val KEY_POCKET_MODE = "pocket_mode"
     private const val KEY_GHOST_MODE = "ghost_mode"
     private const val KEY_MAX_NET_SPEED = "max_net_speed_mb"
+    private const val KEY_UPDATE_INTERVAL = "update_interval_sec"
     private const val KEY_NODES_JSON = "nodes_json"
 
     val COLOR_PALETTE = listOf(
@@ -173,6 +175,7 @@ object NotchPreferences {
         val pocketMode = prefs.getBoolean(KEY_POCKET_MODE, true)
         val ghostMode = prefs.getBoolean(KEY_GHOST_MODE, false)
         val maxNetSpeed = prefs.getFloat(KEY_MAX_NET_SPEED, 5.0f)
+        val updateInterval = prefs.getInt(KEY_UPDATE_INTERVAL, 2).coerceIn(1, 10)
         val nodesJsonStr = prefs.getString(KEY_NODES_JSON, null)
 
         val nodes = mutableListOf<NodeConfig>()
@@ -226,6 +229,7 @@ object NotchPreferences {
             pocketModeEnabled = pocketMode,
             ghostMode = ghostMode,
             maxNetSpeedMB = maxNetSpeed.coerceIn(0.1f, 50.0f),
+            updateIntervalSeconds = updateInterval,
             nodes = nodes
         )
     }
@@ -240,6 +244,7 @@ object NotchPreferences {
             .putBoolean(KEY_POCKET_MODE, config.pocketModeEnabled)
             .putBoolean(KEY_GHOST_MODE, config.ghostMode)
             .putFloat(KEY_MAX_NET_SPEED, config.maxNetSpeedMB)
+            .putInt(KEY_UPDATE_INTERVAL, config.updateIntervalSeconds.coerceIn(1, 10))
             .putString(KEY_NODES_JSON, array.toString())
             .apply()
     }
