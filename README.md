@@ -34,6 +34,9 @@ I don't have a background in Android development. I built this using Google AI t
 
 Built entirely with **Kotlin**, **Jetpack Compose**, and Android's native **WindowManager Overlay Service**, xnode is ultra-lightweight, battery-efficient, and optimized for high-refresh-rate displays.
 
+> [!WARNING]
+> **Overlay Touch Blocking:** Due to Android 12+ security rules, some apps (like the GitHub app) may become unresponsive to touches when the overlay is active. If you experience this, try lowering the opacity or temporarily stopping the overlay.
+
 ## Features
 
 - **Dynamic Hardware Nodes**:
